@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Puzzle Morse — CORSAIR</title>
+<style>
+  body { font-family: Inter, system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; padding:1rem; background:#0b1220; color:#e6eef8; }
+  .box { background: rgba(255,255,255,0.03); padding:1.2rem; border-radius:12px; box-shadow: 0 6px 20px rgba(2,6,23,0.6); width:100%; max-width:620px; text-align:center; }
+  .word { font-size:2rem; letter-spacing:0.14em; font-weight:700; margin:0.5rem 0; }
+  .morse { font-family: monospace; color:#bfe3ff; }
+  .btn { padding:0.6rem 1rem; border-radius:8px; cursor:pointer; background:#2dd4bf; color:#012; border:0; font-weight:600; }
+  .danger { background:#ff6b6b; color:white; }
+  .unlocked { background: linear-gradient(90deg,#fbc2eb,#a6c1ee); color:#012; padding:1rem; border-radius:10px; font-weight:800; }
+  small { color:#9fb0c7; }
+  .grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 8px; }
+  .cell { padding: 10px 0; border-radius: 10px; background: rgba(255,255,255,0.06); }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <h2>Puzzle Morse — Déverrouillage</h2>
+  <p><small>Scanne un QR contenant <code>?m=</code> (morse) et éventuellement <code>&pos=</code> pour forcer la position.</small></p>
+
+  <div>
+    <div>Morse reçu : <span id="morse" class="morse">—</span></div>
+    <div class="word" id="assembled">_ _ _ _ _ _ _</div>
+    <div class="grid" id="posGrid"></div>
+    <div id="status">Statut : <span id="statustext">En attente</span></div>
+  </div>
+
+  <div style="margin-top:1rem;">
+    <input id="manual" placeholder="Entrer morse .- / -..." style="padding:0.6rem 0.6rem; width:60%; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:transparent; color:inherit;">
+    <button id="addBtn" class="btn">Ajouter</button>
+  </div>
+
+  <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:center;">
+    <button id="resetBtn" class="btn danger">Réinitialiser</button>
+    <button id="showKey" class="btn">Tester mot</button>
+  </div>
+
+  <div id="unlockArea" style="margin-top:1rem;"></div>
+  <p style="margin-top:0.6rem;"><small>Astuce : génère les QR avec <code>https://USERNAME.github.io/corsair-puzzle/?m=....&pos=N</code></small></p>
+</div>
+
+<script>
+const TARGET_WORD = "CORSAIR";
+const LETTERS = TARGET_WORD.length;
+
+const MORSE_TO_CHAR = {
+  ".-":"A","-...":"B","-.-.":"C","-..":"D",".":"E","..-.":"F","--.":"G","....":"H","..":"I",
+  ".---":"J","-.-":"K",".-..":"L","--":"M","-.":"N","---":"O",".--.":"P","--.-":"Q",
+  ".-.":"R","...":"S","-":"T","..-":"U","...-":"V",".--":"W","-..-":"X","-.--":"Y","--..":"Z",
+  "-----":"0",".----":"1","..---":"2","...--":"3","....-":"4",".....":"5","-....":"6","--...":"7","---..":"8","----.":"9"
+};
+
+let assembled = new Array(LETTERS).fill(null);
+
+function renderAssembled(){
+  const el = document.getElementById('assembled');
+  el.textContent = assembled.map(c => c ? c : "_").join(" ");
+  const grid = document.getElementById('posGrid');
+  grid.innerHTML = "";
+  for(let i=0;i<LETTERS;i++){
+    const d = document.createElement('div');
+    d.className = "cell";
+    d.textContent = (i+1)+": "+(assembled[i] || "_");
+    grid.appendChild(d);
+  }
+}
+
+function saveState(){ localStorage.setItem('puzzle_state', JSON.stringify(assembled)); }
+function loadState(){ const s = localStorage.getItem('puzzle_state'); if(s){ assembled = JSON.parse(s); renderAssembled(); checkUnlocked(); } }
+
+function decodeMorse(morse){
+  morse = morse.trim();
+  return MORSE_TO_CHAR[morse] || null;
+}
+
+function addLetter(letter, pos=null){
+  if(pos!==null){
+    const idx = pos-1;
+    if(idx>=0 && idx<LETTERS){ assembled[idx] = letter; }
+  } else {
+    const idx = assembled.findIndex(x => x === null);
+    if(idx !== -1) assembled[idx] = letter;
+  }
+  renderAssembled();
+  saveState();
+  checkUnlocked();
+}
+
+function handleUrlParam(){
+  const p = new URLSearchParams(window.location.search);
+  if(p.has('m')){
+    const morse = p.get('m');
+    document.getElementById('morse').textContent = morse;
+    const ch = decodeMorse(morse);
+    const st = document.getElementById('statustext');
+    let pos = null;
+    if(p.has('pos')){ pos = parseInt(p.get('pos'),10); }
+    if(ch){
+      st.textContent = pos ? `Décodé '${ch}' → placé en position ${pos}.` : `Décodé '${ch}' — ajouté.`;
+      addLetter(ch, pos);
+    } else {
+      st.textContent = "Morse inconnu / illisible.";
+    }
+    history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+function checkUnlocked(){
+  if(assembled.every(x => x !== null)){
+    const current = assembled.join('').toUpperCase();
+    if(current === TARGET_WORD){ showUnlocked(); }
+    else { document.getElementById('unlockArea').innerHTML = `<div style="padding:0.6rem;border-radius:8px;background:rgba(255,255,255,0.03)">Mot complet : <strong>${current}</strong> — incorrect.</div>`; }
+  } else {
+    document.getElementById('unlockArea').innerHTML = '';
+  }
+}
+
+function showUnlocked(){
+  document.getElementById('unlockArea').innerHTML = `<div class="unlocked">🔓 Porte déverrouillée !<br>Mot : <strong>${assembled.join('')}</strong></div>`;
+}
+
+document.getElementById('addBtn').addEventListener('click', ()=>{
+  const m = document.getElementById('manual').value.trim();
+  const ch = decodeMorse(m);
+  if(ch){ addLetter(ch); document.getElementById('manual').value=''; }
+  else { alert('Morse non reconnu.'); }
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(!confirm('Réinitialiser le puzzle ?')) return;
+  assembled = new Array(LETTERS).fill(null);
+  saveState();
+  renderAssembled();
+  document.getElementById('morse').textContent = "—";
+  document.getElementById('statustext').textContent = "Réinitialisé";
+  document.getElementById('unlockArea').innerHTML = '';
+});
+
+document.getElementById('showKey').addEventListener('click', ()=> alert('Test : mot cible = ' + TARGET_WORD));
+
+renderAssembled();
+loadState();
+handleUrlParam();
+</script>
+
+</body>
+</html>
