@@ -37,7 +37,6 @@
 
   <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:center;">
     <button id="resetBtn" class="btn danger">Réinitialiser</button>
-    <button id="showKey" class="btn">Tester mot</button>
   </div>
 
   <div id="unlockArea" style="margin-top:1rem;"></div>
@@ -140,8 +139,6 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   document.getElementById('statustext').textContent = "Réinitialisé";
   document.getElementById('unlockArea').innerHTML = '';
 });
-
-document.getElementById('showKey').addEventListener('click', ()=> alert('Test : mot cible = ' + TARGET_WORD));
 
 renderAssembled();
 loadState();
